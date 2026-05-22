@@ -1,85 +1,20 @@
 # Multimodal-Data-for-Predictive-Failure-and-Anomaly-Detection
 
 
-Multimodal Anomaly Detection & Failure Prediction
+
+
 An end-to-end ML pipeline that detects sensor-based system failures using time-series sensor data and log embeddings, deployed with AWS cloud integration.
 
-Results
-MetricScoreOverall Accuracy97%Failure Precision0.89Failure Recall0.80Failure F1 Score0.84Macro Avg F10.91Anomalies Detected50/50 (100%)False Positives0
+Results: The model achieved 97% overall accuracy with a failure class precision of 0.89, recall of 0.80, and F1 score of 0.84. The Isolation Forest detected all 50 injected anomalies (100%) with zero false positives.
 
-How It Works
-The pipeline has 8 steps that run end-to-end:
+How it works: The pipeline runs 8 steps end-to-end. Sensor readings (temperature, pressure, vibration) are ingested from S3 or generated locally, then system log messages are encoded using DistilBERT into 768-dimensional embeddings. Those embeddings are fused with the sensor features, standardized, and passed through an Isolation Forest for unsupervised anomaly detection. An LSTM then learns failure patterns across 10-step windows, after which precision, recall, F1, and accuracy are computed. Finally, metrics are pushed to CloudWatch, the model artifact is saved to S3, and a 4-panel visualization dashboard is saved locally.
 
-Data Ingestion — sensor readings (temperature, pressure, vibration) are loaded from S3 or generated locally
-Log Embeddings — system log messages are encoded using DistilBERT (768-dim embeddings)
-Feature Fusion — sensor features and log embeddings are concatenated and standardized
-Anomaly Detection — Isolation Forest flags anomalous readings in an unsupervised pass
-LSTM Training — a sequence model learns failure patterns across 10-step windows
-Evaluation — precision, recall, F1, and accuracy are computed and printed
-Cloud Publishing — metrics pushed to CloudWatch; model artifact saved to S3
-Visualization — 4-panel matplotlib dashboard saved as anomaly_detection_results.png
+Requirements: Python 3.8 or higher. Install all dependencies with pip3 install boto3 torch transformers scikit-learn pandas numpy matplotlib. The main packages are PyTorch for the LSTM, HuggingFace Transformers for DistilBERT, scikit-learn for Isolation Forest and metrics, and boto3 for AWS integration.
 
+How to run: By default the pipeline runs in local mode with no AWS credentials needed — just run python3 Multimodal_Failure_Detection.py. Cloud calls are mocked and results are printed and saved locally. To activate real AWS integration, set USE_CLOUD=true before running.
 
-Requirements
-Python version
-Python 3.8 or higher
-Install dependencies
-bashpip3 install boto3 torch transformers scikit-learn pandas numpy matplotlib
-Full dependency list
-PackagePurposetorchLSTM model trainingtransformersDistilBERT log embeddingsscikit-learnIsolation Forest, StandardScaler, metricspandas / numpyData manipulationmatplotlibVisualization dashboardboto3AWS S3 and CloudWatch integrationbotocoreAWS error handling (installed with boto3)
+AWS setup: You need three things to use cloud mode. First, configure your AWS credentials using aws configure with your access key, secret key, and region. Second, create an S3 bucket named anomaly-detection-pipeline — the pipeline automatically writes sensor CSVs, model .pt files, and a results JSON to prefixed folders inside it. Third, make sure your IAM user has cloudwatch:PutMetricData, s3:PutObject, and s3:GetObject permissions. Metrics publish under the namespace AnomalyDetection/Pipeline tagged by job ID.
 
-How to Run
-Local mode (no AWS credentials needed)
-bashpython3 Multimodal_Failure_Detection.py
-Cloud calls are mocked by default — you will see [MOCK S3] and [MOCK CloudWatch] log lines. The model trains fully and results are printed and saved locally.
-Cloud mode (with AWS credentials)
-bashexport USE_CLOUD=true
-python3 Multimodal_Failure_Detection.py
-This activates real S3 uploads and CloudWatch metric publishing. See AWS setup below.
+SageMaker: The training loop is structured to be SageMaker-compatible. Swap the local training block for a SageMaker PyTorch estimator using this script as the entry point and pass USE_CLOUD=true via the environment config.
 
-AWS Setup
-To use cloud mode you need three things:
-1. AWS credentials configured
-bashaws configure
-Enter your AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and preferred region (us-east-1 by default).
-2. S3 bucket created
-Create a bucket named anomaly-detection-pipeline (or update S3_BUCKET in the script):
-bashaws s3 mb s3://anomaly-detection-pipeline
-The pipeline writes to three prefixes automatically:
-s3://anomaly-detection-pipeline/
-├── sensor-data/{job_id}/sensor_data.csv
-├── models/lstm_{job_id}.pt
-└── results/{job_id}/results.json
-3. CloudWatch permissions
-Your IAM user or role needs the following permissions:
-json{
-  "Effect": "Allow",
-  "Action": [
-    "cloudwatch:PutMetricData",
-    "s3:PutObject",
-    "s3:GetObject"
-  ],
-  "Resource": "*"
-}
-Metrics are published under the namespace AnomalyDetection/Pipeline and tagged by JobId.
-
-SageMaker (Optional)
-The training loop is structured to be SageMaker-compatible. To run as a managed training job, replace the local training block with a SageMaker PyTorch estimator pointed at this script as the entry point. The USE_CLOUD=true environment variable can be passed via environment in the estimator config.
-
-Output
-After a successful run you will have:
-
-Terminal — printed results table with all citable metrics
-anomaly_detection_results.png — 4-panel dashboard (vibration signal, loss curve, anomaly counts, classifier metrics)
-S3 (cloud mode) — sensor CSV, model .pt file, results JSON
-CloudWatch (cloud mode) — per-epoch loss and final evaluation metrics
-
-
-Project Structure
-Multimodal_Failure_Detection.py   # Main pipeline script
-anomaly_detection_results.png     # Generated visualization (after run)
-README.md                         # This file
-
-Configuration
-Key constants at the top of the script you may want to change:
-VariableDefaultDescriptionAWS_REGIONus-east-1AWS regionS3_BUCKETanomaly-detection-pipelineS3 bucket nameCW_NAMESPACEAnomalyDetection/PipelineCloudWatch namespaceUSE_CLOUDfalseSet to true to enable real AWS callsn_samples1000Number of sensor timestepsepochs5LSTM training epochs
+Key settings you can change: AWS region (default us-east-1), S3 bucket name, CloudWatch namespace, number of sensor timesteps (default 1,000), and number of training epochs (default 5).
